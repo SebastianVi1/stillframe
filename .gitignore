@@ -1,0 +1,19 @@
+bin/
+obj/
+TestResults/
+artifacts/
+*.user
+.vs/
+
+# Local design and agent tooling
+premium-audit.json
+premium-ui.json
+DESIGN.md
+PRODUCT.md
+UX-CONTRACT.md
+
+# Local logs and credentials
+*.log
+.env
+.env.*
+!.env.example

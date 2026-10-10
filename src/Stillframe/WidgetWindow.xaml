@@ -1,0 +1,24 @@
+<Window x:Class="Stillframe.WidgetWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="Stillframe photo widget" Width="360" Height="240" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="False" Background="{DynamicResource Canvas}" ShowInTaskbar="False" ShowActivated="False" Style="{StaticResource {x:Type Window}}">
+  <Grid>
+    <Border CornerRadius="16" Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+    </Border>
+    <Grid x:Name="PhotoSurface" SizeChanged="SurfaceSizeChanged" Background="{DynamicResource Canvas}">
+      <Image x:Name="BackImage" Stretch="UniformToFill" RenderTransformOrigin="0.5,0.5"><Image.RenderTransform><ScaleTransform /></Image.RenderTransform></Image>
+      <Image x:Name="FrontImage" Stretch="UniformToFill" Opacity="0" RenderTransformOrigin="0.5,0.5"><Image.RenderTransform><ScaleTransform /></Image.RenderTransform></Image>
+      <StackPanel x:Name="EmptyState" Panel.ZIndex="2" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
+        <TextBlock Text="▧" FontSize="32" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" />
+        <TextBlock Text="A little space for your photos." Margin="0,12,0,0" FontWeight="SemiBold" TextAlignment="Center" />
+        <TextBlock x:Name="EmptyCaption" Text="Choose a folder from Stillframe Settings." Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0" />
+      </StackPanel>
+      <Border x:Name="EditOverlay" Panel.ZIndex="2" Background="#CA181A1D" VerticalAlignment="Bottom" Visibility="Collapsed" Padding="12">
+        <StackPanel><TextBlock Text="Drag the frame to move it" FontSize="12" Margin="0,0,0,8" />
+          <Button Content="Lock to desktop" Click="LockClicked" Style="{StaticResource PrimaryButton}" Padding="10,6" MinHeight="32" />
+        </StackPanel>
+      </Border>
+      <Border x:Name="ResizeGrip" Panel.ZIndex="3" Width="24" Height="24" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#D030343B" Visibility="Collapsed" Cursor="SizeNWSE" MouseLeftButtonDown="ResizeStart" MouseMove="ResizeMove" MouseLeftButtonUp="ResizeEnd" ToolTip="Drag to resize; exact size is also available in Settings">
+        <TextBlock Text="◢" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Muted}" />
+      </Border>
+    </Grid>
+  </Grid>
+</Window>

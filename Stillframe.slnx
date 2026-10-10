@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Stillframe.Core/Stillframe.Core.csproj" />
+    <Project Path="src/Stillframe/Stillframe.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Stillframe.Tests/Stillframe.Tests.csproj" />
+  </Folder>
+</Solution>
