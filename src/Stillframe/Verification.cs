@@ -85,6 +85,7 @@ internal static class Verification
             Check("Compact window retains visible Apply action", ((Button)window.FindName("ApplyButton")).IsVisible);
             await VerifyMotionAsync(Check);
             await VerifyRenderingAsync(directory, Check);
+            await VerifyPeopleAsync(directory, Check);
             controller.WriteDiagnostics();
             Check("No unsupported foreground fallback", Application.Current.Windows.OfType<WidgetWindow>().All(w => NativeMethods.GetParent(new System.Windows.Interop.WindowInteropHelper(w).Handle) != 0));
         }
@@ -156,9 +157,60 @@ internal static class Verification
         var loader = new Services.ImageLoader();
         var small = await loader.LoadAsync(largePath, 720, 480, ImageFit.Fill, CancellationToken.None);
         var big = await loader.LoadAsync(largePath, 2160, 1440, ImageFit.Fill, CancellationToken.None);
-        check("High-DPI resize replaces lower-resolution cached photo", big.PixelWidth > small.PixelWidth && big.PixelWidth >= 2160 && big.PixelHeight >= 1440, $"{small.PixelWidth}x{small.PixelHeight} to {big.PixelWidth}x{big.PixelHeight}");
+        check("High-DPI resize replaces lower-resolution cached photo", big.Image.PixelWidth > small.Image.PixelWidth && big.Image.PixelWidth >= 2160 && big.Image.PixelHeight >= 1440, $"{small.Image.PixelWidth}x{small.Image.PixelHeight} to {big.Image.PixelWidth}x{big.Image.PixelHeight}");
         var original = await loader.LoadAsync(largePath, 8192, 8192, ImageFit.Fill, CancellationToken.None);
-        check("Photo decoding preserves original resolution without artificial upscaling", original.PixelWidth == 3200 && original.PixelHeight == 1800, null);
+        check("Photo decoding preserves original resolution without artificial upscaling", original.Image.PixelWidth == 3200 && original.Image.PixelHeight == 1800, null);
+    }
+
+    private static async Task VerifyPeopleAsync(string directory, Action<string, bool, string?> check)
+    {
+        var portrait = new BitmapImage(new Uri(Path.Combine(directory, "portrait-fixture.png")));
+        portrait.Freeze();
+        var loader = new Services.ImageLoader();
+        var originalPath = Path.Combine(directory, "portrait-fixture.png");
+        var original = await loader.LoadAsync(originalPath, 512, 512, ImageFit.Fill, CancellationToken.None);
+        check("Windows face detector identifies a real portrait", original.ProtectPeople, null);
+        foreach (var group in new[] { false, true })
+        {
+            var visual = new DrawingVisual();
+            using (var drawing = visual.RenderOpen())
+            {
+                drawing.DrawRectangle(Brushes.Black, null, new Rect(0, 0, 1600, 512));
+                drawing.DrawImage(portrait, new Rect(1088, 0, 512, 512));
+                if (group) drawing.DrawImage(portrait, new Rect(0, 0, 512, 512));
+            }
+            var source = new RenderTargetBitmap(1600, 512, 96, 96, PixelFormats.Pbgra32); source.Render(visual);
+            var path = Path.Combine(directory, group ? "people-group.png" : "person-right.png");
+            var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(source));
+            using (var stream = File.Create(path)) encoder.Save(stream);
+            var automatic = await loader.LoadAsync(path, 512, 512, ImageFit.Fill, CancellationToken.None);
+            check(group ? "Separated people use whole photo without clipping" : "Off-center person gets a square subject crop",
+                automatic.ProtectPeople && automatic.ShowWholePhoto == group && (group || Math.Abs(automatic.Image.PixelWidth - automatic.Image.PixelHeight) <= 1), null);
+            if (!group)
+            {
+                var legacy = await loader.LoadAsync(path, 512, 512, ImageFit.Fill, CancellationToken.None, false);
+                check("Disabling people framing bypasses cached automatic crop", !legacy.ProtectPeople && legacy.Image.PixelWidth > automatic.Image.PixelWidth, null);
+                var fit = await loader.LoadAsync(path, 512, 512, ImageFit.Fit, CancellationToken.None);
+                check("Fit mode keeps whole photo without detection", !fit.ProtectPeople && fit.Image.PixelWidth > fit.Image.PixelHeight, null);
+                var frame = new WidgetWindow { Width = 360, Height = 360, ShowActivated = false };
+                try
+                {
+                    frame.Show(); frame.UpdateLayout();
+                    await frame.ShowPhotoAsync(automatic, new Preferences { ReducedMotion = true, SlowZoom = true }, false);
+                    var front = (Image)frame.FindName("FrontImage");
+                    check("People protection prevents zoom from clipping faces", !front.RenderTransform.HasAnimatedProperties, null);
+                    await Task.Delay(150); frame.UpdateLayout();
+                    var rendered = new RenderTargetBitmap(360, 360, 96, 96, PixelFormats.Pbgra32); rendered.Render(frame);
+                    var center = new byte[4]; rendered.CopyPixels(new Int32Rect(180, 180, 1, 1), center, 4, 0);
+                    check("Centered person is painted into photo frame", center[0] > 40 || center[1] > 40 || center[2] > 40, null);
+                    CaptureWindow(frame, Path.Combine(directory, "person-centered.png"));
+                }
+                finally { frame.Close(); }
+            }
+        }
+        using var canceled = new CancellationTokenSource(); canceled.Cancel();
+        try { await loader.LoadAsync(originalPath, 600, 600, ImageFit.Fill, canceled.Token); check("People analysis honors cancellation", false, null); }
+        catch (OperationCanceledException) { check("People analysis honors cancellation", true, null); }
     }
 
     private static void CaptureSettings(AppController controller, string directory, string name)

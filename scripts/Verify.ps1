@@ -3,11 +3,12 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $reportRoot = Join-Path $projectRoot 'artifacts/verification'
 New-Item -ItemType Directory -Force $reportRoot | Out-Null
+Copy-Item (Join-Path $projectRoot 'tests/Fixtures/astronaut.png') (Join-Path $reportRoot 'portrait-fixture.png') -Force
 & $Dotnet build (Join-Path $projectRoot 'Stillframe.slnx') -c Release --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 & $Dotnet test (Join-Path $projectRoot 'tests/Stillframe.Tests/Stillframe.Tests.csproj') -c Release --no-build --results-directory $reportRoot --logger 'trx;LogFileName=core-results.trx'
 if ($LASTEXITCODE -ne 0) { throw 'Unit tests failed.' }
-$exe = if ($Executable) { $Executable } else { Join-Path $projectRoot 'src/Stillframe/bin/Release/net10.0-windows/Stillframe.exe' }
+$exe = if ($Executable) { $Executable } else { Join-Path $projectRoot 'src/Stillframe/bin/Release/net10.0-windows10.0.19041.0/Stillframe.exe' }
 $profile = Join-Path $reportRoot ('profile-' + [Guid]::NewGuid().ToString('N'))
 if ([System.IO.Path]::IsPathRooted($Dotnet)) { $env:DOTNET_ROOT = Split-Path $Dotnet -Parent }
 $appArguments = '--profile "{0}" --verify "{1}" --diagnostics' -f $profile,$reportRoot
