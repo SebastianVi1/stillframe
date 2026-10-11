@@ -43,16 +43,27 @@ internal static class Verification
             controller.BeginEdit(); Check("Layout edit detaches safely", controller.Editing);
             controller.EndEdit(); Check("Layout locks back to desktop", !controller.Editing && controller.ConnectionStatus == "Attached to desktop");
             await Task.Delay(150);
+            Check("Locked frame contains opaque photo pixels", controller.DesktopFrameCenterAlpha == 255, $"Center alpha: {controller.DesktopFrameCenterAlpha}");
             var widget = Application.Current.Windows.OfType<WidgetWindow>().First();
             var widgetHandle = new System.Windows.Interop.WindowInteropHelper(widget).Handle;
             var surface = NativeMethods.GetParent(widgetHandle);
-            var desktop = NativeMethods.GetParent(surface);
-            if (((long)NativeMethods.GetWindowLongPtr(desktop, NativeMethods.GwlExStyle) & NativeMethods.WsExNoRedirectionBitmap) != 0)
+            var wallpaperHost = NativeMethods.GetParent(surface);
+            Check("Alpha frame is hosted inside the wallpaper layer", NativeMethods.ClassName(wallpaperHost) == "WorkerW");
+            var desktop = NativeMethods.GetParent(wallpaperHost);
+            if (desktop != 0 && ((long)NativeMethods.GetWindowLongPtr(desktop, NativeMethods.GwlExStyle) & NativeMethods.WsExNoRedirectionBitmap) != 0)
             {
                 Check("Locked frame publishes an independent per-pixel alpha surface", !widget.AllowsTransparency &&
                     ((long)NativeMethods.GetWindowLongPtr(surface, NativeMethods.GwlExStyle) & NativeMethods.WsExLayered) != 0 && controller.HasRenderedDesktopFrame);
-                var wallpaper = NativeMethods.FindWindowEx(desktop, 0, "WorkerW", null);
-                Check("Wallpaper stays below frame", wallpaper == 0 || NativeMethods.GetWindow(wallpaper, 2) == 0);
+                var icons = NativeMethods.FindWindowEx(desktop, 0, "SHELLDLL_DefView", null);
+                var above = NativeMethods.GetWindow(wallpaperHost, 3);
+                while (above != 0 && above != icons) above = NativeMethods.GetWindow(above, 3);
+                Check("Desktop icons stay above the wallpaper-hosted frame", icons != 0 && above == icons);
+            }
+            for (var cycle = 0; cycle < 3; cycle++)
+            {
+                controller.BeginEdit(); controller.EndEdit();
+                await Task.Delay(150);
+                Check($"Lock/unlock cycle {cycle + 1} retains native photo pixels", controller.HasRenderedDesktopFrame && controller.DesktopFrameCenterAlpha == 255);
             }
             CreatePhoto(Path.Combine(pictures, "05-added.png"), 0);
             await Task.Delay(1800);
