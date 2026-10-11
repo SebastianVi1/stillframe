@@ -1,6 +1,6 @@
 # Stillframe development build
 
-Stillframe 0.1.5 is an unsigned development application for Windows 11 x64.
+Stillframe 0.1.6 is an unsigned development application for Windows 11 x64.
 
 The application reads selected local image files and stores its own settings and a bounded diagnostic log under the current user's LocalApplicationData folder. It includes no network client, account system or analytics. It does not modify source photographs.
 
