@@ -6,7 +6,7 @@ using Windows.Media.FaceAnalysis;
 
 namespace Stillframe.Services;
 
-internal sealed record LoadedPhoto(BitmapSource Image, bool ShowWholePhoto = false, bool ProtectPeople = false);
+internal sealed record LoadedPhoto(BitmapSource Image, Point? Focus = null, bool ProtectPeople = false);
 
 internal static class PeopleFraming
 {
@@ -31,16 +31,8 @@ internal static class PeopleFraming
                 (double)f.FaceBox.Y / gray.PixelHeight, (double)f.FaceBox.Width / gray.PixelWidth,
                 (double)f.FaceBox.Height / gray.PixelHeight)).ToArray();
             if (faces.Length == 0) return new(image);
-            var decision = PeopleCrop.Choose((double)image.PixelWidth / image.PixelHeight, frameAspect, faces);
-            if (decision.ShowWholePhoto) return new(image, true, true);
-            var b = decision.Bounds;
-            var x = Math.Clamp((int)Math.Floor(b.X * image.PixelWidth), 0, image.PixelWidth - 1);
-            var y = Math.Clamp((int)Math.Floor(b.Y * image.PixelHeight), 0, image.PixelHeight - 1);
-            var width = Math.Clamp((int)Math.Round(b.Width * image.PixelWidth), 1, image.PixelWidth - x);
-            var height = Math.Clamp((int)Math.Round(b.Height * image.PixelHeight), 1, image.PixelHeight - y);
-            var cropped = new CroppedBitmap(image, new Int32Rect(x, y, width, height));
-            cropped.Freeze();
-            return new(cropped, false, true);
+            var bounds = PeopleCrop.Choose((double)image.PixelWidth / image.PixelHeight, frameAspect, faces);
+            return new(image, new Point(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2), true);
         }
         catch (Exception error) when (error is COMException or NotSupportedException or ArgumentException or InvalidOperationException)
         {

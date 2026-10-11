@@ -43,13 +43,12 @@ public partial class WidgetWindow : Window
     }
 
     internal Task ShowPhotoAsync(LoadedPhoto photo, Preferences preferences, bool animate) =>
-        ShowPhotoAsync(photo.Image, preferences with
-        {
-            Fit = photo.ShowWholePhoto ? ImageFit.Fit : preferences.Fit,
-            SlowZoom = preferences.SlowZoom && !photo.ProtectPeople
-        }, animate);
+        ShowPhotoCoreAsync(photo.Image, preferences with { SlowZoom = preferences.SlowZoom && !photo.ProtectPeople }, animate, photo.Focus ?? new Point(.5, .5));
 
-    public async Task ShowPhotoAsync(BitmapSource image, Preferences preferences, bool animate)
+    public Task ShowPhotoAsync(BitmapSource image, Preferences preferences, bool animate) =>
+        ShowPhotoCoreAsync(image, preferences, animate, new Point(.5, .5));
+
+    private async Task ShowPhotoCoreAsync(BitmapSource image, Preferences preferences, bool animate, Point focus)
     {
         EmptyState.Visibility = Visibility.Collapsed;
         var incoming = frontIsCurrent ? BackImage : FrontImage;
@@ -57,6 +56,7 @@ public partial class WidgetWindow : Window
         incoming.BeginAnimation(OpacityProperty, null);
         outgoing.BeginAnimation(OpacityProperty, null);
         incoming.Source = image;
+        incoming.FocalPoint = focus;
         incoming.Stretch = outgoing.Stretch = preferences.Fit == ImageFit.Fill ? Stretch.UniformToFill : Stretch.Uniform;
         var reduced = preferences.ReducedMotion || !SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast;
         var duration = reduced ? 0 : outgoing.Source == null ? 1000 : animate ? 1600 : 0;

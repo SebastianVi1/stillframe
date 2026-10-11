@@ -184,12 +184,12 @@ internal static class Verification
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(source));
             using (var stream = File.Create(path)) encoder.Save(stream);
             var automatic = await loader.LoadAsync(path, 512, 512, ImageFit.Fill, CancellationToken.None);
-            check(group ? "Separated people use whole photo without clipping" : "Off-center person gets a square subject crop",
-                automatic.ProtectPeople && automatic.ShowWholePhoto == group && (group || Math.Abs(automatic.Image.PixelWidth - automatic.Image.PixelHeight) <= 1), null);
+            check(group ? "Separated people keep Fill and original bitmap" : "Off-center person moves Fill viewport without cutting bitmap",
+                automatic.ProtectPeople && automatic.Focus.HasValue && automatic.Image.PixelWidth > automatic.Image.PixelHeight, null);
             if (!group)
             {
                 var legacy = await loader.LoadAsync(path, 512, 512, ImageFit.Fill, CancellationToken.None, false);
-                check("Disabling people framing bypasses cached automatic crop", !legacy.ProtectPeople && legacy.Image.PixelWidth > automatic.Image.PixelWidth, null);
+                check("Disabling people framing restores ordinary center position", !legacy.ProtectPeople && legacy.Focus == null && legacy.Image.PixelWidth == automatic.Image.PixelWidth, null);
                 var fit = await loader.LoadAsync(path, 512, 512, ImageFit.Fit, CancellationToken.None);
                 check("Fit mode keeps whole photo without detection", !fit.ProtectPeople && fit.Image.PixelWidth > fit.Image.PixelHeight, null);
                 var frame = new WidgetWindow { Width = 360, Height = 360, ShowActivated = false };

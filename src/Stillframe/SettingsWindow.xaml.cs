@@ -48,7 +48,8 @@ public partial class SettingsWindow : Window
     }
     internal void UpdatePhoto(LoadedPhoto? photo)
     {
-        PreviewImage.Source = photo?.Image; PreviewImage.Stretch = controller.Preferences.Fit == ImageFit.Fill && photo?.ShowWholePhoto != true && photo?.ProtectPeople != true ? Stretch.UniformToFill : Stretch.Uniform;
+        PreviewImage.Source = photo?.Image; PreviewImage.FocalPoint = photo?.Focus ?? new Point(.5, .5);
+        PreviewImage.Stretch = controller.Preferences.Fit == ImageFit.Fill ? Stretch.UniformToFill : Stretch.Uniform;
         PreviewEmpty.Visibility = photo == null ? Visibility.Visible : Visibility.Collapsed;
         UpdateStatus();
     }

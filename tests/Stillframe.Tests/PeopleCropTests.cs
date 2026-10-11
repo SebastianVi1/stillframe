@@ -9,33 +9,34 @@ public sealed class PeopleCropTests
     public void WidePhotoCentersPersonOnTheRight()
     {
         var crop = PeopleCrop.Choose(2, 1, [new(.8, .3, .1, .15)]);
-        Assert.IsFalse(crop.ShowWholePhoto);
-        Assert.AreEqual(.5, crop.Bounds.X, .00001);
-        Assert.IsTrue(crop.Bounds.X <= .8 && crop.Bounds.X + crop.Bounds.Width >= .9);
+        Assert.AreEqual(.5, crop.X, .00001);
+        Assert.IsTrue(crop.X <= .8 && crop.X + crop.Width >= .9);
     }
 
     [TestMethod]
     public void PortraitKeepsHeadroomForPersonNearTop()
     {
         var crop = PeopleCrop.Choose(.6, 1.5, [new(.35, .06, .2, .1)]);
-        Assert.IsFalse(crop.ShowWholePhoto);
-        Assert.AreEqual(0, crop.Bounds.Y, .00001);
-        Assert.IsGreaterThanOrEqualTo(.26, crop.Bounds.Y + crop.Bounds.Height);
+        Assert.AreEqual(0, crop.Y, .00001);
+        Assert.IsGreaterThanOrEqualTo(.26, crop.Y + crop.Height);
     }
 
     [TestMethod]
-    public void GroupAcrossWidePhotoUsesWholePhoto()
+    public void GroupAcrossWidePhotoKeepsFillAndCentersGroup()
     {
         var crop = PeopleCrop.Choose(2.5, 1, [new(.05, .3, .1, .15), new(.85, .3, .1, .15)]);
-        Assert.IsTrue(crop.ShowWholePhoto);
-        Assert.AreEqual(new PhotoBounds(0, 0, 1, 1), crop.Bounds);
+        Assert.AreEqual(.4, crop.Width, .00001);
+        Assert.AreEqual(.3, crop.X, .00001);
+        Assert.AreEqual(1, crop.Height, .00001);
     }
 
     [TestMethod]
-    public void TallGroupUsesWholePhotoInsteadOfCuttingHeads()
+    public void TallGroupKeepsFillWithoutChangingScale()
     {
         var crop = PeopleCrop.Choose(.6, 2, [new(.25, .15, .12, .12), new(.55, .55, .12, .12)]);
-        Assert.IsTrue(crop.ShowWholePhoto);
+        Assert.AreEqual(.3, crop.Height, .00001);
+        Assert.AreEqual(1, crop.Width, .00001);
+        Assert.IsTrue(crop.Y >= 0 && crop.Y + crop.Height <= 1);
     }
 
     [TestMethod]
@@ -43,11 +44,10 @@ public sealed class PeopleCropTests
     {
         var faces = new PhotoBounds[] { new(.45, .25, .07, .1), new(.6, .28, .07, .1) };
         var crop = PeopleCrop.Choose(2, 1, faces);
-        Assert.IsFalse(crop.ShowWholePhoto);
         foreach (var face in faces)
         {
-            Assert.IsTrue(crop.Bounds.X <= face.X && crop.Bounds.X + crop.Bounds.Width >= face.X + face.Width);
-            Assert.IsTrue(crop.Bounds.Y <= face.Y && crop.Bounds.Y + crop.Bounds.Height >= face.Y + face.Height);
+            Assert.IsTrue(crop.X <= face.X && crop.X + crop.Width >= face.X + face.Width);
+            Assert.IsTrue(crop.Y <= face.Y && crop.Y + crop.Height >= face.Y + face.Height);
         }
     }
 
@@ -55,8 +55,7 @@ public sealed class PeopleCropTests
     public void NoFacesPreservesOrdinaryCenterCropping()
     {
         var crop = PeopleCrop.Choose(2, 1, []);
-        Assert.IsFalse(crop.ShowWholePhoto);
-        Assert.AreEqual(new PhotoBounds(0, 0, 1, 1), crop.Bounds);
+        Assert.AreEqual(new PhotoBounds(0, 0, 1, 1), crop);
     }
 
     [TestMethod]
