@@ -281,12 +281,14 @@ public sealed class AppController : IDisposable
     private void CaptureLayout()
     {
         if (!Editing) return;
+        var resized = Preferences.Width != widget.Width || Preferences.Height != widget.Height;
         var handle = new WindowInteropHelper(widget).Handle;
         NativeMethods.GetWindowRect(handle, out var rect);
         Preferences.X = rect.Left; Preferences.Y = rect.Top;
         Preferences.Width = widget.Width; Preferences.Height = widget.Height;
         Preferences.Monitor = System.Windows.Forms.Screen.FromHandle(handle).DeviceName;
         Save(); settings?.UpdateLayoutFields();
+        if (resized) _ = RenderCurrentAsync(false);
     }
     public void Reconnect()
     {
