@@ -16,7 +16,8 @@ internal sealed class DesktopHost
     private double scale = 1;
     private TimeSpan lastFrame;
     public bool HasRenderedFrame => surface.HasFrame;
-    public bool Attached => hwnd != 0 && NativeMethods.IsWindow(hwnd) && parent != 0 && NativeMethods.IsWindow(parent) &&
+    public byte CenterAlpha => surface.CenterAlpha;
+    public bool Attached => hwnd != 0 && NativeMethods.IsWindow(hwnd) && parent != 0 && NativeMethods.IsWindow(parent) && NativeMethods.IsWindowVisible(parent) &&
         NativeMethods.GetParent(hwnd) == (container != 0 ? container : parent) &&
         (container == 0 || NativeMethods.IsWindow(container) && NativeMethods.GetParent(container) == parent);
     public bool ModernDesktop { get; private set; }
@@ -36,10 +37,16 @@ internal sealed class DesktopHost
         }
         var progman = NativeMethods.FindWindow("Progman", null);
         if (progman == 0) return Fail("Windows Explorer is unavailable. Desktop connection will retry.");
-        NativeMethods.SendMessageTimeout(progman, 0x052C, 0xD, 1, 2, 1000, out _);
         ModernDesktop = ((long)NativeMethods.GetWindowLongPtr(progman, NativeMethods.GwlExStyle) & NativeMethods.WsExNoRedirectionBitmap) != 0;
         shellView = NativeMethods.FindWindowEx(progman, 0, "SHELLDLL_DefView", null);
         nint worker = NativeMethods.FindWindowEx(progman, 0, "WorkerW", null);
+        if (worker == 0 || !NativeMethods.IsWindowVisible(worker))
+        {
+            NativeMethods.SendMessageTimeout(progman, 0x052C, 0xD, 1, 2, 1000, out _);
+            ModernDesktop = ((long)NativeMethods.GetWindowLongPtr(progman, NativeMethods.GwlExStyle) & NativeMethods.WsExNoRedirectionBitmap) != 0;
+            shellView = NativeMethods.FindWindowEx(progman, 0, "SHELLDLL_DefView", null);
+            worker = NativeMethods.FindWindowEx(progman, 0, "WorkerW", null);
+        }
         if (!ModernDesktop)
         {
             NativeMethods.EnumWindows((top, _) =>
@@ -54,7 +61,10 @@ internal sealed class DesktopHost
                 return true;
             }, 0);
         }
-        var target = ModernDesktop ? progman : worker;
+        // Progman's raised desktop has no GDI redirection surface. Per-pixel
+        // layered content must live in its wallpaper WorkerW, whose normal
+        // composition path can blend the frame while the icon sibling stays above it.
+        var target = worker;
         if (target == 0 || shellView == 0) return Fail("Desktop layer is unavailable. Try reconnecting from Settings.");
         if (window is not WidgetWindow photoWindow) return Fail("A photo frame is required.");
         widget = photoWindow;
@@ -97,7 +107,7 @@ internal sealed class DesktopHost
         var height = (int)Math.Round(window.Height * scale);
         var resized = pixelWidth != width || pixelHeight != height;
         pixelWidth = width; pixelHeight = height;
-        NativeMethods.SetWindowPos(Handle, ModernDesktop ? shellView : 0, point.X, point.Y, width, height,
+        NativeMethods.SetWindowPos(Handle, 0, point.X, point.Y, width, height,
             NativeMethods.SwpNoActivate | NativeMethods.SwpFrameChanged | NativeMethods.SwpShowWindow);
         if (container != 0)
             // Keep the WPF render source outside the visible native surface.
@@ -105,13 +115,6 @@ internal sealed class DesktopHost
             NativeMethods.SetWindowPos(hwnd, 0, -width - 1, 0, width, height,
                 NativeMethods.SwpNoActivate | NativeMethods.SwpFrameChanged | NativeMethods.SwpShowWindow);
         if (resized || !surface.HasFrame) Invalidate();
-        if (ModernDesktop)
-        {
-            var wallpaper = NativeMethods.FindWindowEx(parent, 0, "WorkerW", null);
-            if (wallpaper != 0)
-                NativeMethods.SetWindowPos(wallpaper, new nint(1), 0, 0, 0, 0,
-                    NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpNoActivate);
-        }
     }
 
     private void Invalidate() => dirty = true;

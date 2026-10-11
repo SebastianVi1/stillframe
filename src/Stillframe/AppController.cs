@@ -219,6 +219,7 @@ public sealed class AppController : IDisposable
             (int)Math.Clamp(Preferences.Height * dpi * 2, 280, 8192));
     }
     internal bool HasRenderedDesktopFrame => host.HasRenderedFrame;
+    internal byte DesktopFrameCenterAlpha => host.CenterAlpha;
     private async Task PreloadAsync(string? path, CancellationToken token)
     {
         if (path == null || disposed) return;
@@ -362,6 +363,7 @@ public sealed class AppController : IDisposable
                 Editing,
                 ParentClass = NativeMethods.ClassName(NativeMethods.GetParent(host.Handle)),
                 Visible = NativeMethods.IsWindowVisible(host.Handle),
+                FrameCenterAlpha = host.CenterAlpha,
                 SiblingsAbove = siblings,
                 Bounds = new { rect.Left, rect.Top, rect.Right, rect.Bottom },
                 Width = widget.Width,

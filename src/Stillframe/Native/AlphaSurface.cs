@@ -14,6 +14,7 @@ internal sealed class AlphaSurface : IDisposable
     private int width, height;
     private double dpi;
     public bool HasFrame { get; private set; }
+    public byte CenterAlpha { get; private set; }
 
     public void Present(nint handle, FrameworkElement visual, int pixelWidth, int pixelHeight, double scale)
     {
@@ -41,6 +42,8 @@ internal sealed class AlphaSurface : IDisposable
         }
         target!.Clear(); target.Render(visual);
         target.CopyPixels(pixels, width * 4, 0);
+        CenterAlpha = pixels[((height / 2) * width + width / 2) * 4 + 3];
+        if (!HasFrame) Services.Log.Write($"First desktop pixels: {width}x{height}, center alpha={CenterAlpha}, visual visible={visual.IsVisible}");
         for (var y = 0; y < coverage.Length; y++)
         {
             var alpha = coverage[y];
@@ -88,6 +91,6 @@ internal sealed class AlphaSurface : IDisposable
         if (bitmap != 0) NativeMethods.DeleteObject(bitmap);
         if (dc != 0) NativeMethods.DeleteDC(dc);
         dc = bitmap = previous = bits = 0;
-        target = null; pixels = coverage = []; width = height = 0; HasFrame = false;
+        target = null; pixels = coverage = []; width = height = 0; HasFrame = false; CenterAlpha = 0;
     }
 }
