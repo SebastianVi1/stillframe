@@ -9,15 +9,7 @@ internal sealed class DesktopHost
 {
     private nint parent, shellView, hwnd, container;
     private long originalStyle, originalExStyle;
-    private readonly AlphaSurface surface = new();
-    private WidgetWindow? widget;
-    private bool dirty;
-    private int pixelWidth, pixelHeight;
-    private double scale = 1;
-    private TimeSpan lastFrame;
-    public bool HasRenderedFrame => surface.HasFrame;
-    public byte CenterAlpha => surface.CenterAlpha;
-    public bool Attached => hwnd != 0 && NativeMethods.IsWindow(hwnd) && parent != 0 && NativeMethods.IsWindow(parent) && NativeMethods.IsWindowVisible(parent) &&
+    public bool Attached => hwnd != 0 && NativeMethods.IsWindow(hwnd) && parent != 0 && NativeMethods.IsWindow(parent) &&
         NativeMethods.GetParent(hwnd) == (container != 0 ? container : parent) &&
         (container == 0 || NativeMethods.IsWindow(container) && NativeMethods.GetParent(container) == parent);
     public bool ModernDesktop { get; private set; }
@@ -37,16 +29,10 @@ internal sealed class DesktopHost
         }
         var progman = NativeMethods.FindWindow("Progman", null);
         if (progman == 0) return Fail("Windows Explorer is unavailable. Desktop connection will retry.");
+        NativeMethods.SendMessageTimeout(progman, 0x052C, 0xD, 1, 2, 1000, out _);
         ModernDesktop = ((long)NativeMethods.GetWindowLongPtr(progman, NativeMethods.GwlExStyle) & NativeMethods.WsExNoRedirectionBitmap) != 0;
         shellView = NativeMethods.FindWindowEx(progman, 0, "SHELLDLL_DefView", null);
         nint worker = NativeMethods.FindWindowEx(progman, 0, "WorkerW", null);
-        if (worker == 0 || !NativeMethods.IsWindowVisible(worker))
-        {
-            NativeMethods.SendMessageTimeout(progman, 0x052C, 0xD, 1, 2, 1000, out _);
-            ModernDesktop = ((long)NativeMethods.GetWindowLongPtr(progman, NativeMethods.GwlExStyle) & NativeMethods.WsExNoRedirectionBitmap) != 0;
-            shellView = NativeMethods.FindWindowEx(progman, 0, "SHELLDLL_DefView", null);
-            worker = NativeMethods.FindWindowEx(progman, 0, "WorkerW", null);
-        }
         if (!ModernDesktop)
         {
             NativeMethods.EnumWindows((top, _) =>
@@ -61,17 +47,23 @@ internal sealed class DesktopHost
                 return true;
             }, 0);
         }
-        // Progman's raised desktop has no GDI redirection surface. Per-pixel
-        // layered content must live in its wallpaper WorkerW, whose normal
-        // composition path can blend the frame while the icon sibling stays above it.
-        var target = worker;
+        var target = ModernDesktop ? progman : worker;
         if (target == 0 || shellView == 0) return Fail("Desktop layer is unavailable. Try reconnecting from Settings.");
-        if (window is not WidgetWindow photoWindow) return Fail("A photo frame is required.");
-        widget = photoWindow;
-        // The native surface owns per-pixel transparency on both Explorer layouts.
-        container = NativeMethods.CreateWindowEx((uint)(NativeMethods.WsExLayered | NativeMethods.WsExNoActivate | NativeMethods.WsExToolWindow),
-            "STATIC", "Stillframe desktop surface", 0x56000000, 0, 0, 1, 1, target, 0, 0, 0);
-        if (container == 0) return Fail($"Desktop surface creation failed ({Marshal.GetLastPInvokeError()}).");
+        if (ModernDesktop)
+        {
+            // WPF changes WS_EX_LAYERED to match its own render mode. Keep
+            // Explorer's required constant-alpha layer on an independent native
+            // parent, and let the ordinary WPF child paint inside that surface.
+            container = NativeMethods.CreateWindowEx((uint)(NativeMethods.WsExLayered | NativeMethods.WsExNoActivate | NativeMethods.WsExToolWindow),
+                "STATIC", "Stillframe desktop surface", 0x56000000, 0, 0, 1, 1, target, 0, 0, 0);
+            if (container == 0) return Fail($"Desktop surface creation failed ({Marshal.GetLastPInvokeError()}).");
+            if (!NativeMethods.SetLayeredWindowAttributes(container, 0, 255, 2))
+            {
+                var alphaError = Marshal.GetLastPInvokeError();
+                NativeMethods.DestroyWindow(container); container = 0;
+                return Fail($"Desktop surface opacity setup failed ({alphaError}).");
+            }
+        }
         var style = (originalStyle & ~NativeMethods.WsPopup) | NativeMethods.WsChild;
         var extended = (originalExStyle & ~NativeMethods.WsExAppWindow) | NativeMethods.WsExToolWindow | NativeMethods.WsExNoActivate;
         // The WPF child uses ordinary painting; the native parent owns layering.
@@ -88,8 +80,6 @@ internal sealed class DesktopHost
             return Fail($"Desktop attachment failed ({error}: {new Win32Exception(error).Message}).");
         }
         parent = target;
-        widget.FrameChanged += Invalidate;
-        CompositionTarget.Rendering += RenderFrame;
         Place(preferences, window);
         Status = "Attached to desktop";
         Log.Write($"Desktop attached: hwnd={hwnd:X}, surface={container:X}, parent={parent:X}, shell={shellView:X}, modern={ModernDesktop}, build={Environment.OSVersion.Version.Build}, error={error}");
@@ -102,48 +92,34 @@ internal sealed class DesktopHost
         var point = new NativeMethods.Point(preferences.X, preferences.Y);
         NativeMethods.MapWindowPoints(0, parent, ref point, 1);
         var dpi = NativeMethods.GetDpiForWindow(hwnd);
-        scale = dpi == 0 ? 1 : dpi / 96.0;
+        var scale = dpi == 0 ? 1 : dpi / 96.0;
         var width = (int)Math.Round(window.Width * scale);
         var height = (int)Math.Round(window.Height * scale);
-        var resized = pixelWidth != width || pixelHeight != height;
-        pixelWidth = width; pixelHeight = height;
-        NativeMethods.SetWindowPos(Handle, 0, point.X, point.Y, width, height,
+        NativeMethods.SetWindowPos(Handle, ModernDesktop ? shellView : 0, point.X, point.Y, width, height,
             NativeMethods.SwpNoActivate | NativeMethods.SwpFrameChanged | NativeMethods.SwpShowWindow);
         if (container != 0)
-            // Keep the WPF render source outside the visible native surface.
-            // An opaque child painted over it would erase its fractional alpha.
-            NativeMethods.SetWindowPos(hwnd, 0, -width - 1, 0, width, height,
+            NativeMethods.SetWindowPos(hwnd, 0, 0, 0, width, height,
                 NativeMethods.SwpNoActivate | NativeMethods.SwpFrameChanged | NativeMethods.SwpShowWindow);
-        if (resized || !surface.HasFrame) Invalidate();
+        ApplyRoundedRegion(Handle, width, height, scale);
+        if (ModernDesktop)
+        {
+            var wallpaper = NativeMethods.FindWindowEx(parent, 0, "WorkerW", null);
+            if (wallpaper != 0)
+                NativeMethods.SetWindowPos(wallpaper, new nint(1), 0, 0, 0, 0,
+                    NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpNoActivate);
+        }
     }
 
-    private void Invalidate() => dirty = true;
-
-    private void RenderFrame(object? sender, EventArgs e)
+    internal static void ApplyRoundedRegion(nint handle, int width, int height, double scale)
     {
-        if (!Attached || widget == null || (!dirty && !widget.IsAnimating)) return;
-        var time = ((RenderingEventArgs)e).RenderingTime;
-        var interval = pixelWidth * (long)pixelHeight > 1_000_000 ? 33 : 16;
-        if (!dirty && (time - lastFrame).TotalMilliseconds < interval) return;
-        try
-        {
-            widget.UpdateLayout();
-            surface.Present(container, widget.PhotoVisual, pixelWidth, pixelHeight, scale);
-            dirty = false; lastFrame = time;
-        }
-        catch (Exception error) when (error is Win32Exception or ArgumentException or InvalidOperationException)
-        {
-            Log.Write("Desktop frame rendering failed: " + error.Message);
-            Detach(); Status = "Desktop rendering failed. Reconnect from Settings.";
-            widget?.Hide();
-        }
+        var diameter = (int)Math.Round(32 * scale);
+        var region = NativeMethods.CreateRoundRectRgn(0, 0, width + 1, height + 1, diameter, diameter);
+        // Successful SetWindowRgn transfers ownership to Windows.
+        if (region != 0 && NativeMethods.SetWindowRgn(handle, region, true) == 0) NativeMethods.DeleteObject(region);
     }
 
     public void Detach()
     {
-        CompositionTarget.Rendering -= RenderFrame;
-        if (widget != null) widget.FrameChanged -= Invalidate;
-        surface.Dispose();
         if (hwnd == 0 || !NativeMethods.IsWindow(hwnd))
         {
             if (container != 0 && NativeMethods.IsWindow(container)) NativeMethods.DestroyWindow(container);

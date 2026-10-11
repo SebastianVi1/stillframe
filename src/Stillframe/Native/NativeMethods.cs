@@ -10,19 +10,6 @@ internal static class NativeMethods
         WsExAppWindow = 0x40000, WsExNoActivate = 0x08000000, WsExLayered = 0x80000, WsExNoRedirectionBitmap = 0x00200000;
     internal const uint SwpNoActivate = 0x10, SwpNoSize = 1, SwpNoMove = 2, SwpFrameChanged = 0x20, SwpShowWindow = 0x40;
     internal delegate bool EnumProc(nint hwnd, nint lParam);
-    [StructLayout(LayoutKind.Sequential)] internal struct Size { public int Width, Height; public Size(int width, int height) { Width = width; Height = height; } }
-    [StructLayout(LayoutKind.Sequential, Pack = 1)] internal struct BlendFunction { public byte BlendOp, BlendFlags, SourceConstantAlpha, AlphaFormat; }
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct BitmapInfo
-    {
-        public uint Size; public int Width, Height; public ushort Planes, BitCount;
-        public uint Compression, SizeImage; public int XPelsPerMeter, YPelsPerMeter; public uint ColorsUsed, ColorsImportant, Color;
-    }
-    [DllImport("gdi32.dll", SetLastError = true)] internal static extern nint CreateCompatibleDC(nint dc);
-    [DllImport("gdi32.dll")] internal static extern bool DeleteDC(nint dc);
-    [DllImport("gdi32.dll", SetLastError = true)] internal static extern nint CreateDIBSection(nint dc, ref BitmapInfo info, uint usage, out nint bits, nint section, uint offset);
-    [DllImport("gdi32.dll")] internal static extern nint SelectObject(nint dc, nint obj);
-    [DllImport("user32.dll", SetLastError = true)] internal static extern bool UpdateLayeredWindow(nint hwnd, nint destinationDc, nint destination, ref Size size, nint sourceDc, ref Point source, uint colorKey, ref BlendFunction blend, uint flags);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] internal static extern nint CreateWindowEx(uint extended, string cls, string title, uint style, int x, int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
     [DllImport("user32.dll")] internal static extern bool DestroyWindow(nint hwnd);
     [DllImport("user32.dll", SetLastError = true)] internal static extern bool SetLayeredWindowAttributes(nint hwnd, uint key, byte alpha, uint flags);
