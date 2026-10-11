@@ -13,6 +13,7 @@ public sealed record Preferences
     public double IntervalSeconds { get; set; } = 10;
     public ImageOrder Order { get; set; } = ImageOrder.Filename;
     public ImageFit Fit { get; set; } = ImageFit.Fill;
+    public bool CenterPeople { get; set; } = true;
     public bool SlowZoom { get; set; }
     public bool ReducedMotion { get; set; }
     public bool Playing { get; set; } = true;
