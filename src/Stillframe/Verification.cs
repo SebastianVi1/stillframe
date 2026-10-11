@@ -126,6 +126,17 @@ internal static class Verification
                     $"Midpoint RGB: {center[2]}, {center[1]}, {center[0]}");
                 await transition;
             }
+            await frame.ShowPhotoAsync(white, preferences with { SlowZoom = true }, false);
+            var oldPhoto = (Controls.PhotoImage)frame.FindName("BackImage");
+            var newPhoto = (Controls.PhotoImage)frame.FindName("FrontImage");
+            await Task.Delay(150);
+            var next = frame.ShowPhotoAsync(new Services.LoadedPhoto(white, new Point(.8, .5), true), preferences with { Fit = ImageFit.Fit }, true);
+            await Task.Delay(150);
+            check("Outgoing placement remains unchanged during fade", oldPhoto.Stretch == Stretch.UniformToFill && newPhoto.Stretch == Stretch.Uniform, null);
+            check("Incoming zoom starts at normal size before becoming visible", Math.Abs(((ScaleTransform)newPhoto.RenderTransform).ScaleX - 1) < .00001, null);
+            check("Outgoing zoom continues smoothly until hidden", oldPhoto.RenderTransform.HasAnimatedProperties, null);
+            await next;
+            check("Protected photo finishes fade without a zoom reset", Math.Abs(((ScaleTransform)newPhoto.RenderTransform).ScaleX - 1) < .00001, null);
         }
         finally { frame.Close(); }
     }
@@ -204,6 +215,24 @@ internal static class Verification
                     var center = new byte[4]; rendered.CopyPixels(new Int32Rect(180, 180, 1, 1), center, 4, 0);
                     check("Centered person is painted into photo frame", center[0] > 40 || center[1] > 40 || center[2] > 40, null);
                     CaptureWindow(frame, Path.Combine(directory, "person-centered.png"));
+                    check("Photo fade caches scaled layers within software limits", front.CacheMode is BitmapCache, null);
+                    var gaps = new List<double>(); TimeSpan? previousTime = null;
+                    EventHandler rendering = (_, e) =>
+                    {
+                        var time = ((RenderingEventArgs)e).RenderingTime;
+                        if (previousTime.HasValue && time > previousTime.Value) gaps.Add((time - previousTime.Value).TotalMilliseconds);
+                        previousTime = time;
+                    };
+                    CompositionTarget.Rendering += rendering;
+                    try { await frame.ShowPhotoAsync(original, new Preferences { ReducedMotion = false }, true); }
+                    finally { CompositionTarget.Rendering -= rendering; }
+                    if (SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast)
+                    {
+                        var sorted = gaps.Order().ToArray();
+                        var p95 = sorted.Length == 0 ? double.PositiveInfinity : sorted[(int)((sorted.Length - 1) * .95)];
+                        check("Real-photo fade keeps rendering responsive", sorted.Length >= 10 && p95 < 100,
+                            $"Render samples: {sorted.Length}; 95th percentile interval: {p95:F1} ms");
+                    }
                 }
                 finally { frame.Close(); }
             }

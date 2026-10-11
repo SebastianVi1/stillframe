@@ -55,9 +55,10 @@ public partial class WidgetWindow : Window
         var outgoing = frontIsCurrent ? FrontImage : BackImage;
         incoming.BeginAnimation(OpacityProperty, null);
         outgoing.BeginAnimation(OpacityProperty, null);
+        ResetZoom(incoming);
         incoming.Source = image;
         incoming.FocalPoint = focus;
-        incoming.Stretch = outgoing.Stretch = preferences.Fit == ImageFit.Fill ? Stretch.UniformToFill : Stretch.Uniform;
+        incoming.Stretch = preferences.Fit == ImageFit.Fill ? Stretch.UniformToFill : Stretch.Uniform;
         var reduced = preferences.ReducedMotion || !SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast;
         var duration = reduced ? 0 : outgoing.Source == null ? 1000 : animate ? 1600 : 0;
         // The new photo always fades over an opaque old photo. Fading both
@@ -68,8 +69,19 @@ public partial class WidgetWindow : Window
         {
             incoming.Opacity = 0;
             outgoing.Opacity = 1;
-            incoming.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(duration)) { EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
-            await Task.Delay(duration);
+            // Finish layout before starting the clock; cache the scaled photo for the fade.
+            UpdateLayout();
+            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Render);
+            if (!IsLoaded) return;
+            var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(duration)) { EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
+            fade.Completed += (_, _) => completion.TrySetResult();
+            EventHandler closed = (_, _) => completion.TrySetResult();
+            Closed += closed;
+            incoming.BeginAnimation(OpacityProperty, fade);
+            await completion.Task;
+            Closed -= closed;
+            if (!IsLoaded) return;
         }
         incoming.BeginAnimation(OpacityProperty, null);
         outgoing.BeginAnimation(OpacityProperty, null);
@@ -77,13 +89,7 @@ public partial class WidgetWindow : Window
         outgoing.Opacity = 0;
         outgoing.Source = null;
         frontIsCurrent = !frontIsCurrent;
-        foreach (var target in new[] { incoming, outgoing })
-        {
-            var scale = (ScaleTransform)target.RenderTransform;
-            scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
-            scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
-            scale.ScaleX = scale.ScaleY = 1;
-        }
+        ResetZoom(outgoing);
         if (preferences.SlowZoom && !reduced && preferences.Fit == ImageFit.Fill)
         {
             var scale = (ScaleTransform)incoming.RenderTransform;
@@ -91,6 +97,14 @@ public partial class WidgetWindow : Window
             scale.BeginAnimation(ScaleTransform.ScaleXProperty, zoom);
             scale.BeginAnimation(ScaleTransform.ScaleYProperty, zoom);
         }
+    }
+
+    private static void ResetZoom(Image image)
+    {
+        var scale = (ScaleTransform)image.RenderTransform;
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        scale.ScaleX = scale.ScaleY = 1;
     }
 
     public void ShowEmpty(string caption)
@@ -109,6 +123,10 @@ public partial class WidgetWindow : Window
         PhotoSurface.Clip = new RectangleGeometry(bounds);
         var mask = new DrawingBrush(new GeometryDrawing(Brushes.White, null, new RectangleGeometry(bounds, 16, 16)));
         mask.Freeze(); FrameRoot.OpacityMask = AllowsTransparency ? mask : null;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var canCache = e.NewSize.Width * dpi.DpiScaleX <= 2048 && e.NewSize.Height * dpi.DpiScaleY <= 2048;
+        foreach (var image in new[] { FrontImage, BackImage })
+            image.CacheMode = canCache ? new BitmapCache() : null;
         UpdateWindowRegion();
     }
     private void UpdateWindowRegion()
