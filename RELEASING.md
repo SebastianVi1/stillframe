@@ -1,6 +1,6 @@
 # Publishing a release
 
-Distribute **Stillframe-Setup-0.1.6.exe**, the self-contained installer. It includes the .NET 10 runtime, Windows desktop libraries and app dependencies. Users install it, open Stillframe and choose their own photo folder. They do not need the SDK or your development files.
+Distribute **Stillframe-Setup-0.1.7.exe**, the self-contained installer. It includes the .NET 10 runtime, Windows desktop libraries and app dependencies. Users install it, open Stillframe and choose their own photo folder. They do not need the SDK or your development files.
 
 Do not upload only the inner `Stillframe.exe`: the current build needs the other files in its publish folder. The setup installer packages these together.
 
@@ -22,8 +22,8 @@ Replace the compiler path with your Inno Setup installation. The installer appea
 
 1. Commit and push the tested source to `main`.
 2. Open the repository → **Releases** → **Draft a new release**.
-3. Create tag `v0.1.6` targeting the tested commit; use the matching version for later releases.
-4. Attach **Stillframe-Setup-0.1.6.exe** under release assets. Optionally attach its `.sha256` checksum.
+3. Create tag `v0.1.7` targeting the tested commit; use the matching version for later releases.
+4. Attach **Stillframe-Setup-0.1.7.exe** under release assets. Optionally attach its `.sha256` checksum.
 5. Add notes stating Windows 11 x64 support, bundled .NET, changes and known limits. Use **pre-release** while compatibility coverage is limited.
 6. Publish, then download the attached installer and verify its checksum and installation. GitHub's automatic source ZIP is source code, not the installer.
 

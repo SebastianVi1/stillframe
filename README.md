@@ -18,6 +18,7 @@ Open Stillframe, choose a folder with **Browse**, and select **Apply settings**.
 
 - **Photo library:** scans JPG, JPEG, PNG and BMP files, optionally including subfolders; watches for folder changes.
 - **Slideshow:** play/pause, next/previous, adjustable interval, filename/date order and nonrepeating shuffle.
+- **People framing:** Fill mode centers detected faces with headroom. Groups that cannot fit use the whole photo; zoom is paused for detected people. Processing stays on your device. Turn off **Keep people centered in Fill mode** for ordinary center cropping. Faces can be missed; use Fit to guarantee the whole photo is visible.
 - **Photo frame:** Fit/Fill, rounded desktop corners and antialiased edit corners, display-aware photo resolution, gentle 1.6-second fades, optional slow zoom and reduced motion.
 - **Desktop layout:** saved size, position and display; edit/lock controls and desktop reconnection.
 - **Preferences:** saves settings locally; optional startup at sign-in. Original photos are read only.
@@ -40,6 +41,6 @@ Settings and logs are stored in `%LOCALAPPDATA%\Stillframe`. Desktop attachment 
 
 ## Download and releases
 
-Download **Stillframe-Setup-0.1.6.exe** from [GitHub Releases](https://github.com/SebastianVi1/stillframe/releases). It installs the app and its runtime for Windows 11 x64; no .NET SDK or separate runtime installation is needed. A release download becomes available after its installer is uploaded and published.
+Download **Stillframe-Setup-0.1.7.exe** from [GitHub Releases](https://github.com/SebastianVi1/stillframe/releases). It installs the app and its runtime for Windows 11 x64; no .NET SDK or separate runtime installation is needed. A release download becomes available after its installer is uploaded and published.
 
 See [RELEASING.md](RELEASING.md) for build, compatibility checks and publishing steps. Upload the setup installer; the standalone `Stillframe.exe` from the build folder depends on other packaged files.

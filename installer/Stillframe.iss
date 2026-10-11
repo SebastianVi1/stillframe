@@ -1,5 +1,5 @@
 #define AppName "Stillframe"
-#define AppVersion "0.1.6"
+#define AppVersion "0.1.7"
 #ifndef PublishDirectory
 #define PublishDirectory "..\artifacts\publish"
 #endif
@@ -17,7 +17,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.22000
 OutputDir=..\..\
-OutputBaseFilename=Stillframe-Setup-0.1.6
+OutputBaseFilename=Stillframe-Setup-0.1.7
 SetupIconFile=..\src\Stillframe\Assets\Stillframe.ico
 UninstallDisplayIcon={app}\Stillframe.exe
 Compression=lzma2

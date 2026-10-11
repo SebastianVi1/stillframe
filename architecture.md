@@ -28,3 +28,5 @@ Photo decoding follows the frame's physical size and Fit/Fill crop, with 2× sam
 ## Persistence and packaging
 
 Preferences and logs stay in `%LOCALAPPDATA%\Stillframe`; photos are never modified. Each profile has one running instance. A per-user Inno Setup installer bundles the runtime. The app has no accounts, telemetry or network services.
+
+People framing uses the Windows FaceDetector on a small grayscale preview after EXIF orientation. PeopleCrop chooses a normalized crop with headroom; groups that cannot fit fall back to Fit. LoadedPhoto carries the crop and whole-photo/zoom protection into both the widget and Settings preview. Analysis runs off the UI thread and falls back to ordinary center cropping if detection is unavailable. The three-image cache includes size, placement and the people option.
