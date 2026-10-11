@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>Stillframe</AssemblyName>
-    <Version>0.1.6</Version>
+    <Version>0.1.7</Version>
     <ApplicationIcon>Assets/Stillframe.ico</ApplicationIcon>
     <!-- This is a WPF entry point; Windows Forms is used only for the tray and display inventory. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>

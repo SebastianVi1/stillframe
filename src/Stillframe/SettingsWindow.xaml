@@ -63,6 +63,8 @@
             <StackPanel Margin="0,0,12,0"><Label Content="Left (screen pixels)" Target="{Binding ElementName=XBox}" Foreground="{DynamicResource Muted}" Padding="0,0,0,6" FontSize="12" /><TextBox x:Name="XBox" AutomationProperties.Name="Frame left position" /></StackPanel>
             <StackPanel Grid.Column="1"><Label Content="Top (screen pixels)" Target="{Binding ElementName=YBox}" Foreground="{DynamicResource Muted}" Padding="0,0,0,6" FontSize="12" /><TextBox x:Name="YBox" AutomationProperties.Name="Frame top position" /></StackPanel>
           </Grid>
+          <CheckBox x:Name="CenterPeopleBox" Content="Keep people centered in Fill mode" />
+          <TextBlock Text="Leaves room around faces. Shows the whole photo when a group cannot fit. Photos are processed on this device." Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap" />
           <CheckBox x:Name="ZoomBox" Content="Slow zoom in Fill mode" />
           <CheckBox x:Name="ReducedBox" Content="Reduce motion" />
           <TextBlock Text="Windows animation preferences are always respected." Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap" />

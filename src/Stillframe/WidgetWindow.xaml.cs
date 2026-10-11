@@ -3,6 +3,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Interop;
 using Stillframe.Native;
+using Stillframe.Services;
 
 namespace Stillframe;
 
@@ -40,6 +41,13 @@ public partial class WidgetWindow : Window
         ShowActivated = value;
         if (value) { Activate(); Focus(); }
     }
+
+    internal Task ShowPhotoAsync(LoadedPhoto photo, Preferences preferences, bool animate) =>
+        ShowPhotoAsync(photo.Image, preferences with
+        {
+            Fit = photo.ShowWholePhoto ? ImageFit.Fit : preferences.Fit,
+            SlowZoom = preferences.SlowZoom && !photo.ProtectPeople
+        }, animate);
 
     public async Task ShowPhotoAsync(BitmapSource image, Preferences preferences, bool animate)
     {

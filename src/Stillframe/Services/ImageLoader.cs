@@ -5,21 +5,21 @@ namespace Stillframe.Services;
 internal sealed class ImageLoader
 {
     private readonly object gate = new();
-    private readonly Dictionary<(string Path, int Width, int Height, ImageFit Fit), BitmapSource> cache = new();
-    private readonly Queue<(string Path, int Width, int Height, ImageFit Fit)> order = new();
+    private readonly Dictionary<(string Path, int Width, int Height, ImageFit Fit, bool CenterPeople), LoadedPhoto> cache = new();
+    private readonly Queue<(string Path, int Width, int Height, ImageFit Fit, bool CenterPeople)> order = new();
     private int generation;
     public void Clear() { lock (gate) { generation++; cache.Clear(); order.Clear(); } }
 
-    public Task<BitmapSource> LoadAsync(string path, int decodeWidth, int decodeHeight, ImageFit fit, CancellationToken token)
+    public Task<LoadedPhoto> LoadAsync(string path, int decodeWidth, int decodeHeight, ImageFit fit, CancellationToken token, bool centerPeople = true)
     {
         int version;
-        var key = (Path: path.ToUpperInvariant(), Width: Math.Clamp(decodeWidth, 360, 8192), Height: Math.Clamp(decodeHeight, 280, 8192), Fit: fit);
+        var key = (Path: path.ToUpperInvariant(), Width: Math.Clamp(decodeWidth, 360, 8192), Height: Math.Clamp(decodeHeight, 280, 8192), Fit: fit, CenterPeople: centerPeople);
         lock (gate)
         {
             version = generation;
             if (cache.TryGetValue(key, out var existing)) return Task.FromResult(existing);
         }
-        return Task.Run(() =>
+        return Task.Run(async () =>
         {
             token.ThrowIfCancellationRequested();
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
@@ -68,15 +68,18 @@ internal sealed class ImageLoader
                 }
             }
             catch (Exception e) when (e is NotSupportedException or IOException or ArgumentException) { }
+            var photo = fit == ImageFit.Fill && centerPeople
+                ? await PeopleFraming.FrameAsync(result, (double)decodeWidth / decodeHeight, token)
+                : new LoadedPhoto(result);
             lock (gate)
             {
                 token.ThrowIfCancellationRequested();
-                if (generation != version) return result;
+                if (generation != version) return photo;
                 if (!cache.ContainsKey(key)) order.Enqueue(key);
-                cache[key] = result;
+                cache[key] = photo;
                 while (order.Count > 3) cache.Remove(order.Dequeue());
             }
-            return result;
+            return photo;
         }, token);
     }
 }

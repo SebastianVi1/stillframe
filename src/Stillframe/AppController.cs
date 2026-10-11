@@ -23,7 +23,7 @@ public sealed class AppController : IDisposable
     private DesktopHost host = new();
     private WidgetWindow widget = null!;
     private SettingsWindow? settings;
-    private BitmapSource? currentImage;
+    private LoadedPhoto? currentImage;
     private bool disposed, scanning, suspended;
     private int refreshRevision, failures;
     private ImageOrder? catalogOrder;
@@ -196,7 +196,7 @@ public sealed class AppController : IDisposable
             try
             {
                 var size = DecodeSize();
-                var image = await loader.LoadAsync(path, size.Width, size.Height, Preferences.Fit, token);
+                var image = await loader.LoadAsync(path, size.Width, size.Height, Preferences.Fit, token, Preferences.CenterPeople);
                 if (disposed || token.IsCancellationRequested) return;
                 currentImage = image;
                 await widget.ShowPhotoAsync(image, Preferences, animate);
@@ -221,7 +221,7 @@ public sealed class AppController : IDisposable
     private async Task PreloadAsync(string? path, CancellationToken token)
     {
         if (path == null || disposed) return;
-        try { var size = DecodeSize(); await loader.LoadAsync(path, size.Width, size.Height, Preferences.Fit, token); }
+        try { var size = DecodeSize(); await loader.LoadAsync(path, size.Width, size.Height, Preferences.Fit, token, Preferences.CenterPeople); }
         catch (Exception e) when (e is OperationCanceledException or IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException or System.Runtime.InteropServices.COMException) { }
     }
 

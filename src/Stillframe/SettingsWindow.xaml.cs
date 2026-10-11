@@ -4,6 +4,7 @@ using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using Stillframe.Native;
+using Stillframe.Services;
 
 namespace Stillframe;
 
@@ -30,7 +31,7 @@ public partial class SettingsWindow : Window
         MonitorBox.Items.Clear();
         foreach (var screen in System.Windows.Forms.Screen.AllScreens) MonitorBox.Items.Add(new ComboBoxItem { Content = $"Display {MonitorBox.Items.Count + 1}", Tag = screen.DeviceName });
         MonitorBox.SelectedIndex = Math.Max(0, System.Windows.Forms.Screen.AllScreens.ToList().FindIndex(s => s.DeviceName == p.Monitor));
-        ZoomBox.IsChecked = p.SlowZoom; ReducedBox.IsChecked = p.ReducedMotion; StartupBox.IsChecked = p.StartWithWindows;
+        CenterPeopleBox.IsChecked = p.CenterPeople; ZoomBox.IsChecked = p.SlowZoom; ReducedBox.IsChecked = p.ReducedMotion; StartupBox.IsChecked = p.StartWithWindows;
         loading = false; UpdateStatus();
     }
     public void UpdateStatus()
@@ -45,9 +46,9 @@ public partial class SettingsWindow : Window
         StatusText.Text = controller.Status;
         StatusText.Foreground = (Brush)FindResource(controller.HasError ? "Error" : "Muted");
     }
-    public void UpdatePhoto(BitmapSource? photo)
+    internal void UpdatePhoto(LoadedPhoto? photo)
     {
-        PreviewImage.Source = photo; PreviewImage.Stretch = controller.Preferences.Fit == ImageFit.Fill ? Stretch.UniformToFill : Stretch.Uniform;
+        PreviewImage.Source = photo?.Image; PreviewImage.Stretch = controller.Preferences.Fit == ImageFit.Fill && photo?.ShowWholePhoto != true && photo?.ProtectPeople != true ? Stretch.UniformToFill : Stretch.Uniform;
         PreviewEmpty.Visibility = photo == null ? Visibility.Visible : Visibility.Collapsed;
         UpdateStatus();
     }
@@ -94,6 +95,7 @@ public partial class SettingsWindow : Window
             Monitor = monitor,
             Order = (ImageOrder)Math.Max(0, OrderBox.SelectedIndex),
             Fit = (ImageFit)Math.Max(0, FitBox.SelectedIndex),
+            CenterPeople = CenterPeopleBox.IsChecked == true,
             SlowZoom = ZoomBox.IsChecked == true,
             ReducedMotion = ReducedBox.IsChecked == true,
             StartWithWindows = StartupBox.IsChecked == true
