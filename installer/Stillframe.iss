@@ -1,5 +1,8 @@
 #define AppName "Stillframe"
-#define AppVersion "0.1.4"
+#define AppVersion "0.1.5"
+#ifndef PublishDirectory
+#define PublishDirectory "..\artifacts\publish"
+#endif
 
 [Setup]
 AppId={{22FC1CA1-D078-4500-BC71-B03583EC91D3}
@@ -14,7 +17,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.22000
 OutputDir=..\..\
-OutputBaseFilename=Stillframe-Setup-0.1.4
+OutputBaseFilename=Stillframe-Setup-0.1.5
 SetupIconFile=..\src\Stillframe\Assets\Stillframe.ico
 UninstallDisplayIcon={app}\Stillframe.exe
 Compression=lzma2
@@ -32,7 +35,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Files]
-Source: "..\artifacts\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PublishDirectory}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\architecture.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\RELEASING.md"; DestDir: "{app}"; Flags: ignoreversion

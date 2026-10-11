@@ -19,7 +19,7 @@ Stillframe is a .NET 10 Windows application. WPF provides the interface; Win32 c
 
 Folder selection → file scan → playlist → image decoder/cache → photo frame. The controller serializes photo changes, saves preferences and updates the Settings preview.
 
-Explorer's Progman (newer layouts) or WorkerW (older layouts) hosts a native layered surface. WPF supplies offscreen pixels; `UpdateLayeredWindow` presents premultiplied alpha with fractional corner coverage. The render buffer follows physical display resolution and updates during fades/zoom or content changes. Edit mode uses WPF transparency. Edit/lock creates a fresh frame for each mode.
+Explorer's wallpaper WorkerW hosts a native layered surface beneath desktop icons. On newer layouts, WorkerW is a child of Progman; per-pixel transparency is hosted inside WorkerW rather than directly under Progman's unredirected surface. WPF supplies offscreen pixels; `UpdateLayeredWindow` presents premultiplied alpha with fractional corner coverage. Buffers follow display resolution and update during fades/zoom or content changes. Edit mode uses WPF transparency; edit/lock creates a fresh frame.
 
 Two image layers provide the fade: the next photo fades in above the fully opaque previous photo. Software rendering supports the desktop surface; reduced-motion and Windows animation preferences disable animation.
 

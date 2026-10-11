@@ -40,6 +40,6 @@ Settings and logs are stored in `%LOCALAPPDATA%\Stillframe`. Desktop attachment 
 
 ## Download and releases
 
-Download **Stillframe-Setup-0.1.4.exe** from [GitHub Releases](https://github.com/SebastianVi1/stillframe/releases). It installs the app and its runtime for Windows 11 x64; no .NET SDK or separate runtime installation is needed. A release download becomes available after its installer is uploaded and published.
+Download **Stillframe-Setup-0.1.5.exe** from [GitHub Releases](https://github.com/SebastianVi1/stillframe/releases). It installs the app and its runtime for Windows 11 x64; no .NET SDK or separate runtime installation is needed. A release download becomes available after its installer is uploaded and published.
 
 See [RELEASING.md](RELEASING.md) for build, compatibility checks and publishing steps. Upload the setup installer; the standalone `Stillframe.exe` from the build folder depends on other packaged files.
