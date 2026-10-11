@@ -10,7 +10,7 @@ Stillframe is a .NET 10 Windows application. WPF provides the interface; Win32 c
 | `AppController.cs` | Coordinates playback, image loading, settings, folder monitoring and desktop recovery. |
 | `WidgetWindow.xaml` / `.cs` | Renders photos, fade/zoom animations and layout controls. |
 | `SettingsWindow.xaml` / `.cs` | Folder selection, playback controls and validated settings. |
-| `Native/DesktopHost.cs` | Attaches the frame behind icons/windows; manages placement and rounded regions. |
+| `Native/DesktopHost.cs` / `AlphaSurface.cs` | Attaches behind icons/windows; presents DPI-sized pixels with antialiased corner transparency. |
 | `Services/ImageLoader.cs` | Asynchronous image decoding, EXIF orientation, bounded caching and preloading. |
 | `Services/FolderMonitor.cs` | Debounces folder changes; periodic scans recover missed events. |
 | `tests/Stillframe.Tests` / `Verification.cs` | Core tests and isolated application/rendering checks. |
@@ -19,9 +19,11 @@ Stillframe is a .NET 10 Windows application. WPF provides the interface; Win32 c
 
 Folder selection → file scan → playlist → image decoder/cache → photo frame. The controller serializes photo changes, saves preferences and updates the Settings preview.
 
-On newer Windows 11 desktops, Explorer's Progman hosts a native layered surface beneath the icon layer and above the wallpaper. An ordinary WPF child renders inside it. Older layouts attach to WorkerW. Edit/lock creates a fresh frame for each mode to avoid stale WPF window state.
+Explorer's Progman (newer layouts) or WorkerW (older layouts) hosts a native layered surface. WPF supplies offscreen pixels; `UpdateLayeredWindow` presents premultiplied alpha with fractional corner coverage. The render buffer follows physical display resolution and updates during fades/zoom or content changes. Edit mode uses WPF transparency. Edit/lock creates a fresh frame for each mode.
 
 Two image layers provide the fade: the next photo fades in above the fully opaque previous photo. Software rendering supports the desktop surface; reduced-motion and Windows animation preferences disable animation.
+
+Photo decoding follows the frame's physical size and Fit/Fill crop, with 2× sampling headroom. Cache keys include size and fit; decoding is bounded to 16 megapixels and an 8192-pixel edge, without enlarging originals.
 
 ## Persistence and packaging
 

@@ -1,5 +1,5 @@
 #define AppName "Stillframe"
-#define AppVersion "0.1.3"
+#define AppVersion "0.1.4"
 
 [Setup]
 AppId={{22FC1CA1-D078-4500-BC71-B03583EC91D3}
@@ -14,7 +14,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.22000
 OutputDir=..\..\
-OutputBaseFilename=Stillframe-Setup-0.1.3
+OutputBaseFilename=Stillframe-Setup-0.1.4
 SetupIconFile=..\src\Stillframe\Assets\Stillframe.ico
 UninstallDisplayIcon={app}\Stillframe.exe
 Compression=lzma2
