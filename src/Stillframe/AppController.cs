@@ -80,12 +80,14 @@ public sealed class AppController : IDisposable
 
     private void CreateWidget()
     {
+        if (widget != null) { host.Detach(); widget.Close(); }
         host = new DesktopHost();
         widget = new WidgetWindow { Width = Preferences.Width, Height = Preferences.Height };
         widget.LockRequested += EndEdit;
         widget.LayoutChanged += CaptureLayout;
         widget.Show();
         if (!host.Attach(widget, Preferences)) widget.Hide();
+        if (currentImage != null) _ = widget.ShowPhotoAsync(currentImage, Preferences, false);
         settings?.UpdateStatus();
     }
 
@@ -193,7 +195,8 @@ public sealed class AppController : IDisposable
             if (path == null) return;
             try
             {
-                var image = await loader.LoadAsync(path, DecodeWidth(), token);
+                var size = DecodeSize();
+                var image = await loader.LoadAsync(path, size.Width, size.Height, Preferences.Fit, token);
                 if (disposed || token.IsCancellationRequested) return;
                 currentImage = image;
                 await widget.ShowPhotoAsync(image, Preferences, animate);
@@ -209,11 +212,17 @@ public sealed class AppController : IDisposable
         currentImage = null; widget.ShowEmpty("These images could not be opened. Choose another folder or refresh after fixing the files.");
         settings?.UpdatePhoto(null); SetStatus("No readable images were found. Choose another folder or fix the files and refresh.", true);
     }
-    private int DecodeWidth() => (int)Math.Clamp(Preferences.Width * 2, 720, 2560);
+    private (int Width, int Height) DecodeSize()
+    {
+        var dpi = Math.Max(96, NativeMethods.GetDpiForWindow(new WindowInteropHelper(widget).Handle)) / 96.0;
+        return ((int)Math.Clamp(Preferences.Width * dpi * 2, 360, 8192),
+            (int)Math.Clamp(Preferences.Height * dpi * 2, 280, 8192));
+    }
+    internal bool HasRenderedDesktopFrame => host.HasRenderedFrame;
     private async Task PreloadAsync(string? path, CancellationToken token)
     {
         if (path == null || disposed) return;
-        try { await loader.LoadAsync(path, DecodeWidth(), token); }
+        try { var size = DecodeSize(); await loader.LoadAsync(path, size.Width, size.Height, Preferences.Fit, token); }
         catch (Exception e) when (e is OperationCanceledException or IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException or System.Runtime.InteropServices.COMException) { }
     }
 
@@ -235,8 +244,16 @@ public sealed class AppController : IDisposable
         // fresh top-level surface rather than reusing a desktop child HWND.
         host.Detach(); widget.Close();
         Editing = true; host = new DesktopHost();
-        widget = new WidgetWindow { Width = Preferences.Width, Height = Preferences.Height,
-            Left = Preferences.X, Top = Preferences.Y, ShowInTaskbar = true, ShowActivated = true };
+        widget = new WidgetWindow
+        {
+            Width = Preferences.Width,
+            Height = Preferences.Height,
+            Left = Preferences.X,
+            Top = Preferences.Y,
+            ShowInTaskbar = true,
+            ShowActivated = true,
+            AllowsTransparency = true
+        };
         widget.LockRequested += EndEdit;
         widget.LayoutChanged += CaptureLayout;
         widget.Show(); PlaceEditingWindow(); widget.SetEditMode(true);
@@ -257,7 +274,6 @@ public sealed class AppController : IDisposable
         if (Editing)
         {
             widget.Close(); Editing = false; CreateWidget();
-            if (currentImage != null) _ = widget.ShowPhotoAsync(currentImage, Preferences, false);
         }
         else Reconnect();
         settings?.UpdateLayoutFields(); settings?.UpdateStatus(); WriteDiagnostics();
@@ -311,8 +327,8 @@ public sealed class AppController : IDisposable
         if (e.Mode == PowerModes.Resume) { suspended = false; EnsureOnScreen(); Reconnect(); await RefreshAsync(); }
         ResetTimer();
     });
-    private void DisplayChanged(object? sender, EventArgs e) => app.Dispatcher.BeginInvoke(() =>
-    { EnsureOnScreen(); if (Editing) PlaceEditingWindow(); else host.Place(Preferences, widget); Save(); settings?.UpdateLayoutFields(); });
+    private void DisplayChanged(object? sender, EventArgs e) => app.Dispatcher.BeginInvoke(async () =>
+    { EnsureOnScreen(); if (Editing) PlaceEditingWindow(); else host.Place(Preferences, widget); Save(); settings?.UpdateLayoutFields(); await RefreshAsync(); });
 
     private static void ConfigureStartup(bool enabled)
     {

@@ -13,6 +13,10 @@ public partial class WidgetWindow : Window
     private double originalWidth, originalHeight;
     public event Action? LockRequested;
     public event Action? LayoutChanged;
+    internal event Action? FrameChanged;
+    internal FrameworkElement PhotoVisual => PhotoSurface;
+    private DateTime animationUntil;
+    internal bool IsAnimating => DateTime.UtcNow < animationUntil;
     public WidgetWindow()
     {
         InitializeComponent();
@@ -21,9 +25,8 @@ public partial class WidgetWindow : Window
             var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
             if (source?.CompositionTarget != null)
                 source.CompositionTarget.RenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
-            UpdateWindowRegion();
         };
-        SizeChanged += (_, _) => UpdateWindowRegion();
+        DpiChanged += (_, _) => { FrameChanged?.Invoke(); LayoutChanged?.Invoke(); };
         MouseLeftButtonDown += (_, e) =>
         {
             if (!editing || resizing || e.OriginalSource is Button) return;
@@ -32,18 +35,11 @@ public partial class WidgetWindow : Window
         KeyDown += (_, e) => { if (editing && e.Key == Key.Escape) { LockRequested?.Invoke(); e.Handled = true; } };
     }
 
-    private void UpdateWindowRegion()
-    {
-        var handle = new WindowInteropHelper(this).Handle;
-        if (handle == 0) return;
-        var scale = Math.Max(96, NativeMethods.GetDpiForWindow(handle)) / 96.0;
-        DesktopHost.ApplyRoundedRegion(handle, (int)Math.Round(Width * scale), (int)Math.Round(Height * scale), scale);
-    }
-
     public void SetEditMode(bool value)
     {
         editing = value;
         EditOverlay.Visibility = ResizeGrip.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+        FrameChanged?.Invoke();
         ShowActivated = value;
         if (value) { Activate(); Focus(); }
     }
@@ -59,6 +55,8 @@ public partial class WidgetWindow : Window
         incoming.Stretch = outgoing.Stretch = preferences.Fit == ImageFit.Fill ? Stretch.UniformToFill : Stretch.Uniform;
         var reduced = preferences.ReducedMotion || !SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast;
         var duration = reduced ? 0 : outgoing.Source == null ? 1000 : animate ? 1600 : 0;
+        animationUntil = DateTime.UtcNow.AddMilliseconds(duration);
+        FrameChanged?.Invoke();
         // The new photo always fades over an opaque old photo. Fading both
         // layers together would expose the dark canvas halfway through.
         Panel.SetZIndex(incoming, 1);
@@ -89,7 +87,9 @@ public partial class WidgetWindow : Window
             var zoom = new DoubleAnimation(1, 1.035, TimeSpan.FromSeconds(preferences.IntervalSeconds + duration / 1000.0));
             scale.BeginAnimation(ScaleTransform.ScaleXProperty, zoom);
             scale.BeginAnimation(ScaleTransform.ScaleYProperty, zoom);
+            animationUntil = DateTime.UtcNow.AddSeconds(preferences.IntervalSeconds + duration / 1000.0);
         }
+        FrameChanged?.Invoke();
     }
 
     public void ShowEmpty(string caption)
@@ -100,10 +100,18 @@ public partial class WidgetWindow : Window
         }
         EmptyCaption.Text = caption;
         EmptyState.Visibility = Visibility.Visible;
+        animationUntil = DateTime.MinValue;
+        FrameChanged?.Invoke();
     }
 
     private void SurfaceSizeChanged(object sender, SizeChangedEventArgs e)
-        => PhotoSurface.Clip = new RectangleGeometry(new Rect(0, 0, Math.Max(0, e.NewSize.Width), Math.Max(0, e.NewSize.Height)), 16, 16);
+    {
+        var bounds = new Rect(0, 0, Math.Max(0, e.NewSize.Width), Math.Max(0, e.NewSize.Height));
+        PhotoSurface.Clip = new RectangleGeometry(bounds);
+        var mask = new DrawingBrush(new GeometryDrawing(Brushes.White, null, new RectangleGeometry(bounds, 16, 16)));
+        mask.Freeze(); FrameRoot.OpacityMask = mask;
+        FrameChanged?.Invoke();
+    }
     private void LockClicked(object sender, RoutedEventArgs e) => LockRequested?.Invoke();
     private void ResizeStart(object sender, MouseButtonEventArgs e)
     {
