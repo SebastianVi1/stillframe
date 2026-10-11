@@ -29,4 +29,6 @@ Photo decoding follows the frame's physical size and Fit/Fill crop, with 2× sam
 
 Preferences and logs stay in `%LOCALAPPDATA%\Stillframe`; photos are never modified. Each profile has one running instance. A per-user Inno Setup installer bundles the runtime. The app has no accounts, telemetry or network services.
 
-People framing uses the Windows FaceDetector on a small grayscale preview after EXIF orientation. PeopleCrop chooses a normalized crop with headroom; groups that cannot fit fall back to Fit. LoadedPhoto carries the crop and whole-photo/zoom protection into both the widget and Settings preview. Analysis runs off the UI thread and falls back to ordinary center cropping if detection is unavailable. The three-image cache includes size, placement and the people option.
+People framing uses the Windows FaceDetector on a grayscale preview after EXIF orientation. PeopleCrop selects a Fill viewport around all detected faces; PhotoImage draws the original bitmap with that focus point. Fill never switches automatically to Fit and no extra cropped bitmap is created. Groups wider than the viewport are centered as closely as possible. The widget and Settings preview share PhotoImage.
+
+Each photo layer caches its scaled rendering when it fits within the software renderer's 2048-pixel limit. The incoming layer resets its zoom before becoming visible; the outgoing layer retains its placement and zoom until hidden. Fade completion follows the animation event rather than a wall-clock delay. Desktop attachment stays on the working constant-opacity WPF path.
