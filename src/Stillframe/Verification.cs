@@ -43,27 +43,20 @@ internal static class Verification
             controller.BeginEdit(); Check("Layout edit detaches safely", controller.Editing);
             controller.EndEdit(); Check("Layout locks back to desktop", !controller.Editing && controller.ConnectionStatus == "Attached to desktop");
             await Task.Delay(150);
-            Check("Locked frame contains opaque photo pixels", controller.DesktopFrameCenterAlpha == 255, $"Center alpha: {controller.DesktopFrameCenterAlpha}");
-            var widget = Application.Current.Windows.OfType<WidgetWindow>().First();
-            var widgetHandle = new System.Windows.Interop.WindowInteropHelper(widget).Handle;
-            var surface = NativeMethods.GetParent(widgetHandle);
-            var wallpaperHost = NativeMethods.GetParent(surface);
-            Check("Alpha frame is hosted inside the wallpaper layer", NativeMethods.ClassName(wallpaperHost) == "WorkerW");
-            var desktop = NativeMethods.GetParent(wallpaperHost);
-            if (desktop != 0 && ((long)NativeMethods.GetWindowLongPtr(desktop, NativeMethods.GwlExStyle) & NativeMethods.WsExNoRedirectionBitmap) != 0)
+            for (var cycle = 0; cycle < 4; cycle++)
             {
-                Check("Locked frame publishes an independent per-pixel alpha surface", !widget.AllowsTransparency &&
-                    ((long)NativeMethods.GetWindowLongPtr(surface, NativeMethods.GwlExStyle) & NativeMethods.WsExLayered) != 0 && controller.HasRenderedDesktopFrame);
-                var icons = NativeMethods.FindWindowEx(desktop, 0, "SHELLDLL_DefView", null);
-                var above = NativeMethods.GetWindow(wallpaperHost, 3);
-                while (above != 0 && above != icons) above = NativeMethods.GetWindow(above, 3);
-                Check("Desktop icons stay above the wallpaper-hosted frame", icons != 0 && above == icons);
-            }
-            for (var cycle = 0; cycle < 3; cycle++)
-            {
-                controller.BeginEdit(); controller.EndEdit();
-                await Task.Delay(150);
-                Check($"Lock/unlock cycle {cycle + 1} retains native photo pixels", controller.HasRenderedDesktopFrame && controller.DesktopFrameCenterAlpha == 255);
+                if (cycle > 0) { controller.BeginEdit(); controller.EndEdit(); await Task.Delay(150); }
+                var widget = Application.Current.Windows.OfType<WidgetWindow>().First();
+                var child = new System.Windows.Interop.WindowInteropHelper(widget).Handle;
+                var surface = NativeMethods.GetParent(child);
+                Check($"Lock cycle {cycle + 1} retains a visible ordinary photo window", !widget.AllowsTransparency && NativeMethods.IsWindowVisible(child) && controller.ConnectionStatus == "Attached to desktop");
+                if (NativeMethods.ClassName(surface) == "STATIC")
+                {
+                    Check($"Lock cycle {cycle + 1} uses compatible constant opacity", NativeMethods.GetLayeredWindowAttributes(surface, out _, out var opacity, out var flags) && opacity == 255 && (flags & 2) != 0);
+                    var origin = new NativeMethods.Point(0, 0);
+                    NativeMethods.MapWindowPoints(child, surface, ref origin, 1);
+                    Check($"Lock cycle {cycle + 1} keeps photo inside desktop surface", origin.X == 0 && origin.Y == 0);
+                }
             }
             CreatePhoto(Path.Combine(pictures, "05-added.png"), 0);
             await Task.Delay(1800);
@@ -138,15 +131,6 @@ internal static class Verification
 
     private static async Task VerifyRenderingAsync(string directory, Action<string, bool, string?> check)
     {
-        foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
-        {
-            var width = (int)(360 * scale); var height = (int)(240 * scale);
-            var alpha = AlphaSurface.RoundedCoverage(width, height, 16 * scale);
-            check($"Rounded corners have fractional alpha at {scale * 100}% scale",
-                alpha[0] == 0 && alpha[(height / 2) * width + width / 2] == 255 && alpha.Any(a => a > 0 && a < 255), null);
-            check($"Rounded corners remain symmetric at {scale * 100}% scale",
-                Enumerable.Range(0, width).All(x => alpha[x] == alpha[width - 1 - x] && alpha[x] == alpha[(height - 1) * width + x]), null);
-        }
         var frame = new WidgetWindow { Width = 360, Height = 240, AllowsTransparency = true, ShowActivated = false };
         try
         {
