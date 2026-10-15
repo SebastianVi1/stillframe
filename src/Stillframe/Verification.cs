@@ -1,4 +1,5 @@
 using System.Windows.Media.Imaging;
+using System.Windows.Input;
 using System.Windows.Threading;
 using Stillframe.Native;
 
@@ -32,6 +33,7 @@ internal static class Verification
             Check("Next photo", Path.GetFileName(controller.CurrentPath) == "02.png");
             await controller.AdvanceAsync(-1);
             Check("Previous photo", Path.GetFileName(controller.CurrentPath) == "01.png");
+            await VerifyNavigationAsync(controller, directory, Check);
             await controller.AdvanceAsync(1); await controller.AdvanceAsync(1); await controller.AdvanceAsync(1);
             Check("Corrupt image skipped and playback continues", Path.GetFileName(controller.CurrentPath) == "01.png" && controller.Status.Contains("Skipped"));
             controller.TogglePlayback(); Check("Play control", controller.Preferences.Playing);
@@ -95,6 +97,56 @@ internal static class Verification
             File.WriteAllText(Path.Combine(directory, "integration-results.json"), System.Text.Json.JsonSerializer.Serialize(results, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
             controller.Dispose(); Application.Current.Shutdown();
         }
+    }
+
+    private static async Task VerifyNavigationAsync(AppController controller, string directory, Action<string, bool, string?> check)
+    {
+        var widget = Application.Current.Windows.OfType<WidgetWindow>().First();
+        var root = (Grid)widget.FindName("FrameRoot");
+        var overlay = (Grid)widget.FindName("NavigationOverlay");
+        var previous = (Button)widget.FindName("PreviousPhotoButton");
+        var next = (Button)widget.FindName("NextPhotoButton");
+        widget.SetNavigationState(controller.Count, false, true);
+        root.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseEnterEvent });
+        check("Hover reveals both photo navigation arrows", overlay.Opacity == 1 && overlay.IsHitTestVisible && previous.IsEnabled && next.IsEnabled, null);
+        check("Photo navigation has accessible action names", System.Windows.Automation.AutomationProperties.GetName(previous) == "Previous photo" && System.Windows.Automation.AutomationProperties.GetName(next) == "Next photo", null);
+        next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        for (var i = 0; i < 100 && (!next.IsEnabled || Path.GetFileName(controller.CurrentPath) != "02.png"); i++) await Task.Delay(30);
+        check("Desktop frame Next arrow advances photo", Path.GetFileName(controller.CurrentPath) == "02.png" && next.IsEnabled, null);
+        previous.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        for (var i = 0; i < 100 && (!previous.IsEnabled || Path.GetFileName(controller.CurrentPath) != "01.png"); i++) await Task.Delay(30);
+        check("Desktop frame Previous arrow returns photo", Path.GetFileName(controller.CurrentPath) == "01.png" && previous.IsEnabled, null);
+        widget.SetNavigationState(controller.Count, true, true);
+        var path = controller.CurrentPath; next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        check("Busy navigation ignores repeated clicks", !next.IsEnabled && controller.CurrentPath == path, null);
+        widget.SetNavigationState(controller.Count, false, true);
+        root.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseEnterEvent });
+        await Task.Delay(100); widget.UpdateLayout();
+        CaptureWindow(widget, Path.Combine(directory, "hover-navigation.png"));
+        root.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseLeaveEvent });
+        check("Arrows hide after pointer leaves without intercepting clicks", overlay.Opacity == 0 && !overlay.IsHitTestVisible, null);
+        widget.SetNavigationState(1, false, true);
+        root.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseEnterEvent });
+        check("Single photo hides inactive navigation", overlay.Visibility == Visibility.Collapsed && !next.IsEnabled && !previous.IsEnabled, null);
+        widget.SetNavigationState(0, false, true);
+        check("Empty photo collection hides navigation", overlay.Visibility == Visibility.Collapsed, null);
+        widget.SetNavigationState(controller.Count, false, controller.Preferences.ReducedMotion);
+        root.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseLeaveEvent });
+        var compact = new WidgetWindow { Width = 180, Height = 140, ShowActivated = false };
+        try
+        {
+            compact.Show(); compact.SetNavigationState(2, false, true);
+            var source = ((Image)widget.FindName("FrontImage")).Source ?? ((Image)widget.FindName("BackImage")).Source;
+            await compact.ShowPhotoAsync((BitmapSource)source, new Preferences { ReducedMotion = true }, false);
+            var compactRoot = (Grid)compact.FindName("FrameRoot");
+            compactRoot.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseEnterEvent });
+            await Task.Delay(100); compact.UpdateLayout();
+            var left = (Button)compact.FindName("PreviousPhotoButton"); var right = (Button)compact.FindName("NextPhotoButton");
+            var leftPoint = left.TranslatePoint(new Point(0, 0), compactRoot); var rightPoint = right.TranslatePoint(new Point(0, 0), compactRoot);
+            check("Navigation fits the smallest frame without overlap", leftPoint.X >= 0 && leftPoint.X + left.ActualWidth < rightPoint.X && rightPoint.X + right.ActualWidth <= compact.ActualWidth, null);
+            CaptureWindow(compact, Path.Combine(directory, "hover-navigation-compact.png"));
+        }
+        finally { compact.Close(); }
     }
 
     private static async Task VerifyMotionAsync(Action<string, bool, string?> check)
