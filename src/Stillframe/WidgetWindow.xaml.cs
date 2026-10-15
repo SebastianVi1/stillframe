@@ -14,6 +14,8 @@ public partial class WidgetWindow : Window
     private double originalWidth, originalHeight;
     public event Action? LockRequested;
     public event Action? LayoutChanged;
+    public event Action<int>? NavigationRequested;
+    private bool canNavigate, navigationBusy, changingPhoto, pointerInside, navigationReducedMotion;
     public WidgetWindow()
     {
         InitializeComponent();
@@ -28,15 +30,57 @@ public partial class WidgetWindow : Window
         DpiChanged += (_, _) => { UpdateWindowRegion(); LayoutChanged?.Invoke(); };
         MouseLeftButtonDown += (_, e) =>
         {
-            if (!editing || resizing || e.OriginalSource is Button) return;
+            if (!editing || resizing || IsInsideButton(e.OriginalSource as DependencyObject)) return;
             try { DragMove(); LayoutChanged?.Invoke(); } catch (InvalidOperationException) { }
         };
-        KeyDown += (_, e) => { if (editing && e.Key == Key.Escape) { LockRequested?.Invoke(); e.Handled = true; } };
+        KeyDown += (_, e) =>
+        {
+            if (editing && e.Key == Key.Escape) { LockRequested?.Invoke(); e.Handled = true; }
+            else if (e.Key is Key.Left or Key.Right && canNavigate && !navigationBusy && !changingPhoto)
+            { NavigationRequested?.Invoke(e.Key == Key.Left ? -1 : 1); e.Handled = true; }
+        };
+    }
+
+    internal void SetNavigationState(int photoCount, bool busy, bool reducedMotion)
+    {
+        canNavigate = photoCount > 1; navigationBusy = busy; navigationReducedMotion = reducedMotion;
+        NavigationOverlay.Visibility = canNavigate ? Visibility.Visible : Visibility.Collapsed;
+        UpdateNavigationButtons(); UpdateNavigationVisibility();
+    }
+    private void UpdateNavigationButtons() => PreviousPhotoButton.IsEnabled = NextPhotoButton.IsEnabled = canNavigate && !navigationBusy && !changingPhoto;
+    private void FrameMouseEnter(object sender, MouseEventArgs e) { pointerInside = true; UpdateNavigationVisibility(); }
+    private void FrameMouseLeave(object sender, MouseEventArgs e) { pointerInside = false; UpdateNavigationVisibility(); }
+    private void FrameKeyboardFocusChanged(object sender, DependencyPropertyChangedEventArgs e) => UpdateNavigationVisibility();
+    private void UpdateNavigationVisibility()
+    {
+        if (NavigationOverlay == null) return;
+        var reveal = canNavigate && (pointerInside || NavigationOverlay.IsKeyboardFocusWithin);
+        NavigationOverlay.IsHitTestVisible = reveal;
+        var duration = navigationReducedMotion || !SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast ? 0 : reveal ? 180 : 220;
+        if (duration == 0) { NavigationOverlay.BeginAnimation(OpacityProperty, null); NavigationOverlay.Opacity = reveal ? 1 : 0; }
+        else NavigationOverlay.BeginAnimation(OpacityProperty, new DoubleAnimation(reveal ? 1 : 0, TimeSpan.FromMilliseconds(duration)) { EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
+    }
+    private void PreviousPhotoClicked(object sender, RoutedEventArgs e) => RequestNavigation(-1, e);
+    private void NextPhotoClicked(object sender, RoutedEventArgs e) => RequestNavigation(1, e);
+    private void RequestNavigation(int direction, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (canNavigate && !navigationBusy && !changingPhoto) NavigationRequested?.Invoke(direction);
+    }
+    private static bool IsInsideButton(DependencyObject? source)
+    {
+        while (source != null)
+        {
+            if (source is Button) return true;
+            source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+        }
+        return false;
     }
 
     public void SetEditMode(bool value)
     {
         editing = value;
+        NavigationOverlay.Margin = new Thickness(10, 0, 10, value ? 92 : 0);
         EditOverlay.Visibility = ResizeGrip.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
         ShowActivated = value;
         if (value) { Activate(); Focus(); }
@@ -50,53 +94,58 @@ public partial class WidgetWindow : Window
 
     private async Task ShowPhotoCoreAsync(BitmapSource image, Preferences preferences, bool animate, Point focus)
     {
-        EmptyState.Visibility = Visibility.Collapsed;
-        var incoming = frontIsCurrent ? BackImage : FrontImage;
-        var outgoing = frontIsCurrent ? FrontImage : BackImage;
-        incoming.BeginAnimation(OpacityProperty, null);
-        outgoing.BeginAnimation(OpacityProperty, null);
-        ResetZoom(incoming);
-        incoming.Source = image;
-        incoming.FocalPoint = focus;
-        incoming.Stretch = preferences.Fit == ImageFit.Fill ? Stretch.UniformToFill : Stretch.Uniform;
-        var reduced = preferences.ReducedMotion || !SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast;
-        var duration = reduced ? 0 : outgoing.Source == null ? 1000 : animate ? 1600 : 0;
-        // The new photo always fades over an opaque old photo. Fading both
-        // layers together would expose the dark canvas halfway through.
-        Panel.SetZIndex(incoming, 1);
-        Panel.SetZIndex(outgoing, 0);
-        if (duration > 0)
+        changingPhoto = true; navigationReducedMotion = preferences.ReducedMotion; UpdateNavigationButtons();
+        try
         {
-            incoming.Opacity = 0;
-            outgoing.Opacity = 1;
-            // Finish layout before starting the clock; cache the scaled photo for the fade.
-            UpdateLayout();
-            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Render);
-            if (!IsLoaded) return;
-            var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(duration)) { EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
-            fade.Completed += (_, _) => completion.TrySetResult();
-            EventHandler closed = (_, _) => completion.TrySetResult();
-            Closed += closed;
-            incoming.BeginAnimation(OpacityProperty, fade);
-            await completion.Task;
-            Closed -= closed;
-            if (!IsLoaded) return;
+            EmptyState.Visibility = Visibility.Collapsed;
+            var incoming = frontIsCurrent ? BackImage : FrontImage;
+            var outgoing = frontIsCurrent ? FrontImage : BackImage;
+            incoming.BeginAnimation(OpacityProperty, null);
+            outgoing.BeginAnimation(OpacityProperty, null);
+            ResetZoom(incoming);
+            incoming.Source = image;
+            incoming.FocalPoint = focus;
+            incoming.Stretch = preferences.Fit == ImageFit.Fill ? Stretch.UniformToFill : Stretch.Uniform;
+            var reduced = preferences.ReducedMotion || !SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast;
+            var duration = reduced ? 0 : outgoing.Source == null ? 1000 : animate ? 1600 : 0;
+            // The new photo always fades over an opaque old photo. Fading both
+            // layers together would expose the dark canvas halfway through.
+            Panel.SetZIndex(incoming, 1);
+            Panel.SetZIndex(outgoing, 0);
+            if (duration > 0)
+            {
+                incoming.Opacity = 0;
+                outgoing.Opacity = 1;
+                // Finish layout before starting the clock; cache the scaled photo for the fade.
+                UpdateLayout();
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Render);
+                if (!IsLoaded) return;
+                var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(duration)) { EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
+                fade.Completed += (_, _) => completion.TrySetResult();
+                EventHandler closed = (_, _) => completion.TrySetResult();
+                Closed += closed;
+                incoming.BeginAnimation(OpacityProperty, fade);
+                await completion.Task;
+                Closed -= closed;
+                if (!IsLoaded) return;
+            }
+            incoming.BeginAnimation(OpacityProperty, null);
+            outgoing.BeginAnimation(OpacityProperty, null);
+            incoming.Opacity = 1;
+            outgoing.Opacity = 0;
+            outgoing.Source = null;
+            frontIsCurrent = !frontIsCurrent;
+            ResetZoom(outgoing);
+            if (preferences.SlowZoom && !reduced && preferences.Fit == ImageFit.Fill)
+            {
+                var scale = (ScaleTransform)incoming.RenderTransform;
+                var zoom = new DoubleAnimation(1, 1.035, TimeSpan.FromSeconds(preferences.IntervalSeconds + duration / 1000.0));
+                scale.BeginAnimation(ScaleTransform.ScaleXProperty, zoom);
+                scale.BeginAnimation(ScaleTransform.ScaleYProperty, zoom);
+            }
         }
-        incoming.BeginAnimation(OpacityProperty, null);
-        outgoing.BeginAnimation(OpacityProperty, null);
-        incoming.Opacity = 1;
-        outgoing.Opacity = 0;
-        outgoing.Source = null;
-        frontIsCurrent = !frontIsCurrent;
-        ResetZoom(outgoing);
-        if (preferences.SlowZoom && !reduced && preferences.Fit == ImageFit.Fill)
-        {
-            var scale = (ScaleTransform)incoming.RenderTransform;
-            var zoom = new DoubleAnimation(1, 1.035, TimeSpan.FromSeconds(preferences.IntervalSeconds + duration / 1000.0));
-            scale.BeginAnimation(ScaleTransform.ScaleXProperty, zoom);
-            scale.BeginAnimation(ScaleTransform.ScaleYProperty, zoom);
-        }
+        finally { changingPhoto = false; UpdateNavigationButtons(); }
     }
 
     private static void ResetZoom(Image image)
@@ -109,6 +158,7 @@ public partial class WidgetWindow : Window
 
     public void ShowEmpty(string caption)
     {
+        SetNavigationState(0, false, navigationReducedMotion);
         foreach (var image in new[] { FrontImage, BackImage })
         {
             image.BeginAnimation(OpacityProperty, null); image.Opacity = 0; image.Source = null;

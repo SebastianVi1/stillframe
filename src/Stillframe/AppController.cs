@@ -85,6 +85,8 @@ public sealed class AppController : IDisposable
         widget = new WidgetWindow { Width = Preferences.Width, Height = Preferences.Height };
         widget.LockRequested += EndEdit;
         widget.LayoutChanged += CaptureLayout;
+        widget.NavigationRequested += direction => _ = AdvanceAsync(direction);
+        widget.SetNavigationState(Count, false, Preferences.ReducedMotion);
         widget.Show();
         if (!host.Attach(widget, Preferences)) widget.Hide();
         if (currentImage != null) _ = widget.ShowPhotoAsync(currentImage, Preferences, false);
@@ -175,8 +177,9 @@ public sealed class AppController : IDisposable
     {
         if (disposed || Count == 0 || !await displayGate.WaitAsync(0)) return;
         slideshow.Stop();
+        widget.SetNavigationState(Count, true, Preferences.ReducedMotion);
         try { await LoadAndShowAsync(direction, moveFirst: true, animate: true); }
-        finally { displayGate.Release(); ResetTimer(); }
+        finally { widget.SetNavigationState(Count, false, Preferences.ReducedMotion); displayGate.Release(); ResetTimer(); }
     }
     private async Task RenderCurrentAsync(bool animate)
     {
@@ -199,7 +202,9 @@ public sealed class AppController : IDisposable
                 var image = await loader.LoadAsync(path, size.Width, size.Height, Preferences.Fit, token, Preferences.CenterPeople);
                 if (disposed || token.IsCancellationRequested) return;
                 currentImage = image;
+                widget.SetNavigationState(Count, true, Preferences.ReducedMotion);
                 await widget.ShowPhotoAsync(image, Preferences, animate);
+                widget.SetNavigationState(Count, false, Preferences.ReducedMotion);
                 Preferences.LastImage = path; Save(); settings?.UpdatePhoto(image);
                 SetStatus(skipped > 0 ? $"Skipped {skipped} unreadable {(skipped == 1 ? "photo" : "photos")}. Slideshow continues." : $"{Count} {(Count == 1 ? "photo" : "photos")} ready. Your originals stay untouched.", skipped > 0);
                 _ = PreloadAsync(playlist.Next, token);
@@ -255,6 +260,8 @@ public sealed class AppController : IDisposable
         };
         widget.LockRequested += EndEdit;
         widget.LayoutChanged += CaptureLayout;
+        widget.NavigationRequested += direction => _ = AdvanceAsync(direction);
+        widget.SetNavigationState(Count, false, Preferences.ReducedMotion);
         widget.Show(); PlaceEditingWindow(); widget.SetEditMode(true);
         if (currentImage != null) _ = widget.ShowPhotoAsync(currentImage, Preferences, false);
         SetStatus("Move or resize the frame, then choose Lock to desktop. You can also enter exact coordinates in Settings.");
